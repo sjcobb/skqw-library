@@ -1,0 +1,136 @@
+/**
+ * Song of Storms
+ *
+ * Author: Steven Cobb
+ * Version: 1
+ */
+let ctx;
+let params = {
+    hue: {
+        value: 120,
+        type: 'range',
+        label: 'hue',
+        min: 0,
+        max: 360
+    },
+    waveHeight: {
+        value: 3,
+        type: 'range',
+        label: 'Wave Height',
+        min: 1,
+        max: 10
+    },
+};
+let acc = [];
+let volHigh = 0;
+const VOL_DECAY = 2;
+const DECAY = 20;
+
+function init(skqw) {
+    ctx = skqw.createCanvas().getContext('2d');
+    skqw.sample.ft.forEach((v, i) => acc[i] = 0);
+    setTimeout(() => {
+        ctx.lineCap = 'round';
+    });
+}
+
+function tick(skqw) {
+    const { width, height } = skqw.dimensions;
+    const { ft, ts } = skqw.sample;
+
+    ctx.globalCompositeOperation = 'source-over';
+    drawBg(width, height, ft);
+
+    ctx.globalCompositeOperation = 'screen';
+    drawBars(width, height, ft);
+    ctx.globalCompositeOperation = 'source-over';
+    drawWave(width, height, ts);
+}
+
+function add(a, b) {
+    return a + b;
+}
+
+function drawBg(w, h, ft) {
+    const vol = ft.reduce(add, 0);
+    const delta = vol - volHigh;
+    volHigh += delta / 20;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, `hsla(${params.hue.value + 50}, 50%, 5%, 0.3)`);
+    gradient.addColorStop(1, `hsla(${params.hue.value + 50}, 100%, ${Math.log10(volHigh / 2 + 2) * 10}%, 0.8)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+}
+
+function drawWave(w, h, ts) {
+    const length = ts.length;
+    const interval = w / length;
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `hsla(${params.hue.value + 40}, 100%, 60%, 0.7)`;
+    ctx.lineWidth = h / 250;
+
+    let p1;
+    let p2;
+    let mid;
+
+    for(let i = 0; i < ts.length; i++) {
+        const val = ts[i] * params.waveHeight.value;
+        p1 = linePoint(i, interval, val, h);
+        p2 = linePoint(i + 1, interval, val, h);
+        if (i === 0) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+        } else {
+            mid = midPoint(p1, p2);
+            ctx.quadraticCurveTo(p1.x, p1.y, mid.x, mid.y);
+        }
+    }
+    ctx.stroke();
+}
+
+function linePoint(i, interval, val, height) {
+    return {
+        x: i * interval,
+        y: height / 2 + val * 100
+    };
+}
+
+function midPoint(p1, p2) {
+    return {
+        x: p1.x + (p2.x - p1.x) / 2,
+        y: p1.y + (p2.y - p1.y) / 2
+    };
+}
+
+
+function drawBars(w, h, ft) {
+    const length = ft.length;
+    const barWidth = w / length;
+
+    for(let i = 0; i < ft.length; i++) {
+        const val = ft[i];
+        const x = i * barWidth;
+        const height = Math.log10(val + 1) * h;
+        const delta = height - acc[i];
+        acc[i] += delta / 4;
+
+        const y = h - acc[i];
+        const saturation = Math.log2(1 + acc[i]) * 40;
+        ctx.fillStyle = `hsla(${params.hue.value + saturation}, 50%, 50%, 0.8)`;
+
+        ctx.fillRect(x, y, barWidth - 1, acc[i]);
+    }
+}
+
+function paramChange(skqw, change) {
+    params[change.paramKey].value = change.newValue;
+}
+
+module.exports = {
+    name: 'Song of Storms',
+    init,
+    tick,
+    paramChange,
+    params
+};
